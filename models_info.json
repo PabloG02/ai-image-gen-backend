@@ -1,0 +1,20 @@
+[
+  {
+    "publisher": "CompVis",
+    "family": "stable-diffusion",
+    "version": "v1-4",
+    "id": "CompVis/stable-diffusion-v1-4"
+  },
+  {
+    "publisher": "stabilityai",
+    "family": "sdxl",
+    "version": "turbo",
+    "id": "stabilityai/sdxl-turbo"
+  },
+  {
+    "publisher": "cagliostrolab",
+    "family": "animagine-xl",
+    "version": "3.0",
+    "id": "cagliostrolab/animagine-xl-3.0"
+  }
+]
