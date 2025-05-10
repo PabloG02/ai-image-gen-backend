@@ -1,0 +1,7 @@
+accelerate==1.6.0
+diffusers==0.33.1
+fastapi==0.115.12
+Pillow>=11
+pydantic>=2.11
+transformers>=4.51
+uvicorn>=0.34
