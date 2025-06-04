@@ -1,0 +1,80 @@
+# This is a GitLab CI/CD configuration file for building and publishing a Docker image.
+# stages:
+#   - build-and-publish
+# 
+# build-and-publish:
+#   stage: build-and-publish
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == "main"
+# 
+#   before_script:
+#     - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+#   script:
+#     - docker build --no-cache -t $CI_REGISTRY_IMAGE:latest .
+#     - docker push $CI_REGISTRY_IMAGE:latest
+
+stages:
+  - test-image-generation-gpu
+
+test-image-generation-gpu:
+  stage: test-image-generation-gpu
+  image: nvcr.io/nvidia/pytorch:25.04-py3
+  before_script:
+    # Install dependencies (FastAPI, diffusers, etc.)
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+
+  script:
+    # 1. Verify that PyTorch sees the GPU (optional sanity check)
+    - |
+      python - <<'PYCODE'
+      import torch
+      if not torch.cuda.is_available():
+          print("❌ torch.cuda.is_available() == False (no GPU).")
+          exit(1)
+      else:
+          print("✅ torch.cuda.is_available() == True")
+      PYCODE
+
+    # 2. Start FastAPI with Uvicorn in the background
+    - python main.py &
+
+    # 3. Wait for the server to be ready
+    - |
+      set +e # Disable exit on error temporarily
+      READY=false
+      for i in $(seq 1 300); do
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/v1/models)
+        if [ "$HTTP_STATUS" -eq 200 ]; then
+          echo "✅ /v1/models is responding (200 OK)"
+          READY=true
+          break
+        else
+          echo "⏳ Waiting for /v1/models (status: $HTTP_STATUS, attempt $i/300)..."
+          sleep 5
+        fi
+      done
+
+      set -e # Re-enable exit on error
+      if [ "$READY" = false ]; then
+        echo "❌ Server failed to start after 25 minutes (300 × 5s)"
+        exit 1
+      fi
+
+    # 4. Send a small image‐generation request
+    - |
+      RESPONSE=$(curl -s -X POST http://localhost:8000/v1/images/generations \
+        -H "Content-Type: application/json" \
+        -d '{"prompt":"A single red apple on a wooden table","n":1,"size":"512x512"}')
+      echo "🖼️  Response payload: $RESPONSE"
+
+    # 5. Ensure the response contains "b64_json"
+    - |
+      echo "$RESPONSE" | grep -q '"b64_json":'
+      if [ $? -ne 0 ]; then
+        echo "❌ No b64_json field found—image generation failed."
+        exit 1
+      fi
+
+    # 6. Print success
+    - echo "✅ GPU image generation succeeded."
